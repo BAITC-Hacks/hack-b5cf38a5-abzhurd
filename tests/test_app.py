@@ -115,7 +115,7 @@ class AppTests(unittest.TestCase):
         with patch("engine.simulator.simulate", wraps=simulator.simulate) as simulate_call:
             app = self.app()
             simulate_call.assert_not_called()
-        self.assertIn("Аким на 5 часов", self.visible_text(app))
+        self.assertIn("QalaMind", self.visible_text(app))
         for index, decision in enumerate(REFERENCE):
             self.assertEqual(app.selectbox(key=f"measure_{index}").value, decision["measure_id"])
             if "district" in decision:

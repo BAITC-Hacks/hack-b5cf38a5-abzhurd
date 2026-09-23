@@ -1,4 +1,4 @@
-# AGENTS.md - AI Urban Simulator ("Аким на 5 часов")
+# AGENTS.md - QalaMind
 
 > **HackAlem AI 2026** | Track: «Аким на 5 часов» - AI-симулятор управления городом
 >
@@ -238,6 +238,7 @@ Simulator contract decisions:
 Implemented core behavior:
 
 - Astana-branded Streamlit dashboard.
+- QalaMind branding, with a pinned decision/budget summary that smoothly compacts on scroll. The local asset `assets/summary_header.html` handles presentation only; Python owns all displayed values. Reduced-motion preferences disable transitions.
 - KPI cards for budget, final Score and delta, weakest district, and critical alerts.
 - Five decision rows with measure and conditional district selection.
 - Real-time local validation and budget feedback.

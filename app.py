@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import streamlit as st
 
@@ -20,6 +21,19 @@ REFERENCE = (
     ("M12", None), ("M5", "Сарыарка"),
 )
 PROVIDERS = {"openai": "OpenAI", "nvidia": "NVIDIA", "offline": "Автономно"}
+
+
+def _render_summary(decision_count: int, report: ValidationReport) -> None:
+    """Render Python-calculated values; local JavaScript controls appearance only."""
+    st.html(Path(__file__).parent / "assets" / "summary_header.html", unsafe_allow_javascript=True)
+    with st.container(key="decision_summary"):
+        selected, spent, remaining = st.columns(3)
+        selected.metric("Выбрано решений", f"{decision_count} / {DECISION_COUNT}")
+        spent.metric("Стоимость выбора", report.budget_used if report.budget_used is not None else "—")
+        remaining.metric(
+            "Остаток бюджета",
+            report.budget_limit - report.budget_used if report.budget_used is not None else "—",
+        )
 
 
 def _clear_result() -> None:
@@ -290,16 +304,10 @@ def _render_app() -> None:
     errors, general = _validation_messages(report, decisions, rows, dataset)
 
     st.caption(f"АСТАНА · БЮДЖЕТ {report.budget_limit} · ГОРИЗОНТ {dataset.horizon_quarters} КВАРТАЛОВ")
-    st.title("Аким на 5 часов")
+    st.title("QalaMind")
     st.markdown('<div style="height:4px;width:80px;background:#C69B39;margin-bottom:20px"></div>', unsafe_allow_html=True)
     st.write("Выберите пять решений для города и оцените, как изменится качество жизни в районах.")
-    selected, spent, remaining = st.columns(3)
-    selected.metric("Выбрано решений", f"{len(decisions)} / {DECISION_COUNT}")
-    spent.metric("Стоимость выбора", report.budget_used if report.budget_used is not None else "—")
-    remaining.metric(
-        "Остаток бюджета",
-        report.budget_limit - report.budget_used if report.budget_used is not None else "—",
-    )
+    _render_summary(len(decisions), report)
     load, clear = st.columns(2)
     load.button("Загрузить пример", key="load_reference", on_click=_set_rows, args=(True,))
     clear.button("Очистить выбор", key="clear_selection", on_click=_set_rows, args=(False,))
@@ -333,7 +341,7 @@ def _render_app() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Аким на 5 часов · Астана", page_icon="🏙️", layout="wide")
+    st.set_page_config(page_title="QalaMind · Астана", page_icon="🏙️", layout="wide")
     try:
         _render_app()
     except Exception as exc:

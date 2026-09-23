@@ -1,6 +1,6 @@
-# Аким на 5 часов
+# QalaMind
 
-AI-симулятор управления городом Астана для HackAlem AI 2026.
+Симулятор городских решений для Астаны. Проект для кейса «Аким на 5 часов» на HackAlem AI 2026.
 
 ## Current status
 
@@ -9,6 +9,8 @@ The **deterministic simulator is implemented and tested**: official JSON data, P
 The **Streamlit core flow is launchable**: five decision rows, live validation and budget feedback, a visual grouping of selected measures across the five directions, explicit simulation, result KPIs, a district comparison table, and a separate briefing button. Each decision row also labels its measure's direction. The reference scenario is prefilled. The advisor supports OpenAI, NVIDIA, and a deterministic offline briefing, with a provider selector and per-session cache. Automated provider tests use mocked responses; live calls require your own key and account access.
 
 Charts, indicator heatmaps, additional presets, JSON audit export, and `run.sh` remain planned enhancements. The current interface is in Russian with a light Astana theme.
+
+The decision count, current cost, and remaining budget stay visible in a pinned summary panel. It smoothly becomes compact while scrolling and expands again near the top. The panel supports narrow screens and respects reduced-motion preferences. Its local styling script only controls presentation; Python supplies all displayed values. This uses Streamlit 1.52 or later, as declared in `requirements.txt`.
 
 ## Repository authority
 
@@ -72,6 +74,7 @@ The implemented core UI adds KPI cards, the reference example, a visual measure-
 ├── requirements.txt
 ├── .env.example
 ├── .streamlit/config.toml    # light Astana theme
+├── assets/summary_header.html # pinned summary styling and scroll animation
 ├── run.sh                    # planned
 ├── data/                     # verified source data
 │   ├── districts.json

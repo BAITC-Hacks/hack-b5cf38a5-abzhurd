@@ -1,0 +1,107 @@
+<style>
+/* Scope every rule to this panel, leaving other KPI cards and controls intact. */
+[data-testid="stElementContainer"]:has(#qalamind-summary-anchor) {
+  height: 0;
+  min-height: 0;
+  margin: 0;
+}
+.st-key-decision_summary,
+[data-testid="stLayoutWrapper"]:has(> .st-key-decision_summary) {
+  position: sticky;
+  top: var(--qalamind-header-top, 4rem);
+  z-index: 100;
+}
+.st-key-decision_summary {
+  padding: 22px 26px;
+  border: 1px solid #dce5ee;
+  border-top: 3px solid #c69b39;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .97);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 3px 14px rgba(23, 44, 64, .04);
+  transition: padding .28s ease, border-radius .28s ease, box-shadow .28s ease;
+}
+.st-key-decision_summary [data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap;
+  gap: 16px;
+}
+.st-key-decision_summary [data-testid="stColumn"] {
+  min-width: 0;
+  width: 0;
+  flex: 1 1 0;
+}
+.st-key-decision_summary [data-testid="stMetricLabel"] p {
+  color: #536b80;
+  font-size: .85rem;
+  white-space: normal;
+  transition: font-size .28s ease;
+}
+.st-key-decision_summary [data-testid="stMetricValue"] {
+  color: #1765a4;
+  font-size: 2rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  transition: font-size .28s ease;
+}
+.st-key-decision_summary.qalamind-compact {
+  padding: 9px 22px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(23, 44, 64, .12);
+}
+.st-key-decision_summary.qalamind-compact [data-testid="stMetricValue"] {
+  font-size: 1.4rem;
+}
+.st-key-decision_summary.qalamind-compact [data-testid="stMetricLabel"] p {
+  font-size: .78rem;
+}
+@media (max-width: 640px) {
+  .st-key-decision_summary { padding: 15px 12px; }
+  .st-key-decision_summary.qalamind-compact { padding: 8px 12px; }
+  .st-key-decision_summary [data-testid="stHorizontalBlock"] { gap: 8px; }
+  .st-key-decision_summary [data-testid="stMetricLabel"] p,
+  .st-key-decision_summary.qalamind-compact [data-testid="stMetricLabel"] p { font-size: .72rem; }
+  .st-key-decision_summary [data-testid="stMetricValue"] { font-size: 1.5rem; }
+  .st-key-decision_summary.qalamind-compact [data-testid="stMetricValue"] { font-size: 1.2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-key-decision_summary,
+  .st-key-decision_summary [data-testid="stMetricValue"],
+  .st-key-decision_summary [data-testid="stMetricLabel"] p { transition: none; }
+}
+</style>
+<span id="qalamind-summary-anchor" aria-hidden="true"></span>
+<script>
+(() => {
+  // Streamlit can rerun this script: dispose old listeners before attaching new ones.
+  window.qalamindSummaryCleanup?.();
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const panel = document.querySelector('.st-key-decision_summary');
+    const anchor = document.getElementById('qalamind-summary-anchor');
+    if (!panel || !anchor) return;
+    const toolbar = document.querySelector('[data-testid="stHeader"]');
+    const top = Math.max(0, toolbar?.getBoundingClientRect().bottom || 0) + 10;
+    panel.style.setProperty('--qalamind-header-top', `${top}px`);
+    if (panel.parentElement?.matches('[data-testid="stLayoutWrapper"]')) {
+      panel.parentElement.style.setProperty('--qalamind-header-top', `${top}px`);
+    }
+    panel.classList.toggle('qalamind-compact', anchor.getBoundingClientRect().top <= top);
+  };
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  // Capture scrolls from Streamlit's internal scrolling area as well as the window.
+  window.addEventListener('scroll', schedule, { capture: true, passive: true });
+  window.addEventListener('resize', schedule);
+  const observer = new MutationObserver(schedule);
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.qalamindSummaryCleanup = () => {
+    window.removeEventListener('scroll', schedule, true);
+    window.removeEventListener('resize', schedule);
+    observer.disconnect();
+    cancelAnimationFrame(frame);
+  };
+  schedule();
+})();
+</script>
