@@ -304,8 +304,14 @@ class AppTests(unittest.TestCase):
         self.simulate(app)
         self.assertEqual(app.session_state["result"].critical_metrics, 2)
         text = self.visible_text(app)
-        for expected in ("Нура", "S1", "S2"):
+        for expected in (
+            "Нура", "Доступность школ и детских садов",
+            "Доступность поликлиник и первичной помощи",
+        ):
             self.assertIn(expected, text)
+        warning_text = " ".join(str(item.value) for item in app.warning)
+        self.assertNotIn("S1", warning_text)
+        self.assertNotIn("S2", warning_text)
 
     def test_dataset_failure_stops_controls_without_traceback(self) -> None:
         with patch("engine.simulator.load_dataset", side_effect=simulator.DatasetError("private error details")):

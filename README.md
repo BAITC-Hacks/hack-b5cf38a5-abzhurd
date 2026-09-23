@@ -62,7 +62,7 @@ Official must-haves:
 
 The case also lists scenario comparison, indicator visualizations, AI recommendations, unexpected-event modeling, and presentation generation as optional enhancements.
 
-The implemented core UI adds KPI cards, the reference example, a visual measure-by-direction overview, a district before/after table, and structured briefings with cached offline fallback. Charts, additional presets, an indicator heat breakdown, and JSON audit export remain planned. These are team implementation choices, not additional official rules.
+The implemented core UI adds KPI cards, the reference example, a visual measure-by-direction overview with measure names, a district before/after table, full Russian indicator labels with a glossary, and structured briefings with cached offline fallback. Charts, additional presets, an indicator heat breakdown, and JSON audit export remain planned. These are team implementation choices, not additional official rules.
 
 ## Target architecture
 
@@ -178,7 +178,7 @@ if isinstance(result, SimulationResult):
     print(briefing.source, briefing.why_score_changed)
 ```
 
-An explicit `provider="nvidia"` argument overrides `ADVISOR_PROVIDER` for that call; mock mode still wins. A missing key or failed call returns `source="mock"` without trying the other provider. The advisor sends only calculated scenario facts and Python-generated candidate sentences, never conversation history. The model selects one candidate for each briefing field. Pydantic validates the returned structure and Python rejects any text that is not an exact candidate, preventing invented numbers, events, or measures from reaching the UI. Python also assigns `source`. The cached fallback uses `data/mock_debrief.json` templates filled with the actual score direction, critical metrics, and weakest district, so it works when the API is unavailable. Imported audit JSON must be recomputed by `simulate` before use.
+An explicit `provider="nvidia"` argument overrides `ADVISOR_PROVIDER` for that call; mock mode still wins. A missing key or failed call returns `source="mock"` without trying the other provider. The advisor sends only calculated scenario facts and Python-generated analytical candidates, never conversation history. Live candidates highlight district changes, measure contributions, synergies, clipping, or remaining risks, use full Russian indicator names, and differ from the offline summary. The model selects one candidate for each briefing field. Pydantic validates the returned structure and Python rejects any text that is not an exact candidate, preventing invented numbers, events, or measures from reaching the UI. Python also assigns `source`. The cached fallback uses `data/mock_debrief.json` templates filled with actual scores, human-readable indicator names, and the weakest district, so it works when the API is unavailable. Imported audit JSON must be recomputed by `simulate` before use.
 
 Cache keys include the chosen provider, model, prompt version, and canonical simulation facts. A request has a 700-token maximum, a 20-second timeout, and no SDK retries. The adapter logs request ID and token usage when supplied, without logging keys or prompt contents. A timeout, rate limit, refusal, malformed or truncated response, or unavailable model produces the offline briefing. After editing `.env`, restart the Streamlit process and reload the browser page to load new settings and start a fresh session cache. Clearing the decision rows or loading the example intentionally preserves the existing briefing cache.
 

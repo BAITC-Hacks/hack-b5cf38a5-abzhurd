@@ -84,6 +84,7 @@ class AdvisorTests(unittest.TestCase):
 
         self.assertEqual(briefing.source, "openai")
         self.assertEqual(briefing.why_score_changed, self.model_text()["why_score_changed"])
+        self.assertNotEqual(briefing.why_score_changed, advisor._offline_debrief(self.benchmark).why_score_changed)
         client_class.assert_called_once()
         self.assertEqual(client_class.call_args.kwargs["timeout"], 20)
         self.assertEqual(client_class.call_args.kwargs["max_retries"], 0)
@@ -106,6 +107,7 @@ class AdvisorTests(unittest.TestCase):
 
         self.assertEqual(briefing.source, "nvidia")
         self.assertEqual(briefing.main_risk, self.model_text()["main_risk"])
+        self.assertNotEqual(briefing.main_risk, advisor._offline_debrief(self.benchmark).main_risk)
         self.assertEqual(client_class.call_args.kwargs["base_url"], "https://integrate.api.nvidia.com/v1")
         self.assertEqual(client_class.call_args.kwargs["timeout"], 20)
         self.assertEqual(client_class.call_args.kwargs["max_retries"], 0)
@@ -114,6 +116,17 @@ class AdvisorTests(unittest.TestCase):
         self.assertEqual(called["max_tokens"], 700)
         self.assertIs(called["stream"], False)
         self.assertEqual([item["role"] for item in called["messages"]], ["system", "user"])
+
+    def test_live_candidates_are_analytical_and_distinct_from_offline_copy(self) -> None:
+        candidates = advisor._candidate_briefings(self.benchmark)
+        offline = advisor._offline_debrief(self.benchmark)
+        fallback_text = offline.model_dump(exclude={"source"})
+        for field, options in candidates.items():
+            with self.subTest(field=field):
+                self.assertTrue(options)
+                self.assertNotIn(fallback_text[field], options)
+                for option in options:
+                    self.assertNotRegex(option, r"\b(?:T[12]|E[12]|S[12]|B[12]|C[12])\b")
 
     def test_explicit_settings_cannot_exceed_request_limits(self) -> None:
         for provider in ("openai", "nvidia"):
@@ -391,6 +404,10 @@ class AdvisorTests(unittest.TestCase):
             client_class.assert_not_called()
         for briefing in outputs:
             self.assert_mock(briefing)
+            self.assertNotRegex(
+                " ".join((briefing.why_score_changed, briefing.main_risk, briefing.next_quarter_recommendation)),
+                r"\b(?:T[12]|E[12]|S[12]|B[12]|C[12])\b",
+            )
         self.assertEqual(outputs[0], generate_debrief(self.benchmark, {}, provider="offline"))
         self.assertEqual(len({briefing.why_score_changed for briefing in outputs}), 3)
         self.assertNotIn("улучш", outputs[1].why_score_changed.lower())

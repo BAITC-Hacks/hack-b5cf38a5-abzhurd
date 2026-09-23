@@ -21,10 +21,11 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from engine.models import Debrief, SimulationResult
+from engine.labels import INDICATOR_LABELS
 
 
 Provider = Literal["openai", "nvidia", "offline"]
-PROMPT_VERSION = "urban-advisor-v2"
+PROMPT_VERSION = "urban-advisor-v4"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 LOGGER = logging.getLogger(__name__)
 
@@ -87,11 +88,12 @@ class _DebriefText(BaseModel):
 
 
 SYSTEM_PROMPT = (
-    "Выбери краткое объяснение результата симулятора Астаны на русском языке. "
-    "Python уже вычислил все числа и подготовил только подтверждённые варианты фраз. "
-    "Для каждого из трёх ключей выбери ровно одну строку из соответствующего списка "
-    "candidates и скопируй её дословно. Не дописывай текст, числа, события, меры, "
-    "причины или эффекты. Верни только JSON с ключами why_score_changed, "
+    "Объясни результат симуляции Астаны кратко и по-русски. Python вычислил все числа "
+    "и подготовил для каждого поля только проверенные аналитические варианты, "
+    "отличающиеся от автономной сводки. Используй полные русские названия показателей, "
+    "не коды вроде S1 или C2. Выбери наиболее полезную строку из "
+    "соответствующего списка candidates и скопируй её дословно. Не дописывай текст, "
+    "числа, события, меры, причины или эффекты. Верни только JSON с ключами why_score_changed, "
     "main_risk, next_quarter_recommendation; без Markdown и дополнительных полей."
 )
 
@@ -243,13 +245,13 @@ def _offline_debrief(result: SimulationResult) -> Debrief:
     weakest = next(d for d in result.districts if d.name == result.weakest_district)
     indicator = min(weakest.indicators_after, key=weakest.indicators_after.__getitem__)
     recommendation = templates["recommendation"].format(
-        indicator=indicator, district=weakest.name,
+        indicator=INDICATOR_LABELS[indicator], district=weakest.name,
         value=f"{weakest.indicators_after[indicator]:.2f}",
     )
     if result.critical_locations_after:
         metric = result.critical_locations_after[0]
         risk = templates["critical_risk"].format(
-            indicator=metric.indicator, district=metric.district,
+            indicator=INDICATOR_LABELS[metric.indicator], district=metric.district,
             value=f"{metric.value:.2f}",
         )
     else:
@@ -265,8 +267,7 @@ def _offline_debrief(result: SimulationResult) -> Debrief:
 
 
 def _candidate_briefings(result: SimulationResult) -> dict[str, tuple[str, ...]]:
-    """Offer only sentences whose factual claims Python can verify directly."""
-    base = _offline_debrief(result)
+    """Offer analytical observations distinct from the deterministic fallback."""
     largest_district_change = max(result.districts, key=lambda district: abs(district.delta))
     contributions = (
         (abs(value), measure, district, indicator, value)
@@ -274,7 +275,8 @@ def _candidate_briefings(result: SimulationResult) -> dict[str, tuple[str, ...]]
         for district, indicators in districts.items()
         for indicator, value in indicators.items()
     )
-    _, measure, district, indicator, effect = max(contributions)
+    _, _, district, indicator, effect = max(contributions)
+    indicator_name = INDICATOR_LABELS[indicator]
     lowest_district, lowest_indicator, lowest_value = min(
         (
             (district.name, indicator, value)
@@ -284,38 +286,36 @@ def _candidate_briefings(result: SimulationResult) -> dict[str, tuple[str, ...]]
         key=lambda item: item[2],
     )
     synergy_options = tuple(
-        f"Синергия {item.measures[0]} и {item.measures[1]} добавила "
-        f"{item.bonus:+.2f} к {item.indicator} в районе {item.district}. "
-        f"Итоговая оценка: {result.city_score_after:.2f}."
+        f"Сочетание выбранных решений дополнительно изменило показатель "
+        f"«{INDICATOR_LABELS[item.indicator]}» в районе {item.district} "
+        f"на {item.bonus:+.2f}."
         for item in result.synergy_contributions
     )
     clipping_options = tuple(
-        f"Ограничение шкалы скорректировало {indicator} в районе {district} "
-        f"на {adjustment:+.2f}. Итоговая оценка: {result.city_score_after:.2f}."
+        f"Итоговое значение показателя «{INDICATOR_LABELS[indicator]}» в районе "
+        f"{district} ограничилось границей шкалы; часть расчётного эффекта "
+        f"({adjustment:+.2f}) не отразилась в результате."
         for district, indicators in result.clipping_adjustments.items()
         for indicator, adjustment in indicators.items() if adjustment != 0
     )
     return {
         "why_score_changed": (
-            base.why_score_changed,
-            f"Наибольшее изменение районного балла: {largest_district_change.name} "
-            f"({largest_district_change.delta:+.2f}). Итоговая оценка: {result.city_score_after:.2f}.",
-            f"Наибольший по модулю вклад отдельной меры в показатель: "
-            f"{measure}, {district}, {indicator} ({effect:+.2f}). "
-            f"Итоговая оценка: {result.city_score_after:.2f}.",
+            f"Сильнее всего районная оценка изменилась в районе {largest_district_change.name} "
+            f"({largest_district_change.delta:+.2f}).",
+            f"Самый заметный отдельный эффект пришёлся на показатель "
+            f"«{indicator_name}» в районе {district} ({effect:+.2f}); его дала одна из выбранных мер.",
         ) + synergy_options + clipping_options,
         "main_risk": (
-            base.main_risk,
-            f"Минимальное значение показателя после решений: "
-            f"{lowest_district}, {lowest_indicator} ({lowest_value:.2f}).",
-            f"Самый слабый район по итоговой оценке: {result.weakest_district}.",
+            f"После решений ниже всего осталось значение «{INDICATOR_LABELS[lowest_indicator]}» "
+            f"в районе {lowest_district}: {lowest_value:.2f}.",
+            f"Самой сложной точкой остаётся район {result.weakest_district}: "
+            f"у него наименьшая итоговая оценка среди районов.",
         ),
         "next_quarter_recommendation": (
-            base.next_quarter_recommendation,
-            f"Проверьте фактический результат меры {measure} для показателя "
-            f"{indicator} в районе {district}; расчётный вклад: {effect:+.2f}.",
-            f"Сопоставьте показатели района {lowest_district} до и после решений, "
-            f"особенно {lowest_indicator} ({lowest_value:.2f} после решений).",
+            f"В следующем квартале проверьте фактические изменения по показателю "
+            f"«{indicator_name}» в районе {district} и сравните их с расчётом для выбранных мер.",
+            f"Сравните ситуацию в районе {lowest_district} до и после решений, "
+            f"особенно по показателю «{INDICATOR_LABELS[lowest_indicator]}»."
         ),
     }
 

@@ -7,6 +7,7 @@ import logging
 import streamlit as st
 
 from engine import advisor, simulator
+from engine.labels import INDICATOR_GROUPS, INDICATOR_LABELS
 from engine.models import (
     DECISION_COUNT, MAX_PER_DIRECTION, Dataset, Debrief, SimulationResult,
     ValidationIssue, ValidationReport,
@@ -19,13 +20,6 @@ REFERENCE = (
     ("M12", None), ("M5", "Сарыарка"),
 )
 PROVIDERS = {"openai": "OpenAI", "nvidia": "NVIDIA", "offline": "Автономно"}
-INDICATOR_LABELS = {
-    "T1": "Свобода движения", "T2": "Доступность общественного транспорта",
-    "E1": "Озеленение", "E2": "Качество зимнего воздуха",
-    "S1": "Школы и детсады", "S2": "Поликлиники и первичная помощь",
-    "B1": "Безопасность улиц", "B2": "Безопасность дорог",
-    "C1": "Надёжность коммунальных сетей", "C2": "Скорость обработки обращений",
-}
 
 
 def _clear_result() -> None:
@@ -55,6 +49,9 @@ def _initialize(settings: advisor.AdvisorSettings) -> None:
     if "advisor_cache" not in st.session_state:
         st.session_state.advisor_cache = {}
         _set_rows(reference=True)
+    if st.session_state.get("advisor_prompt_version") != advisor.PROMPT_VERSION:
+        st.session_state.advisor_prompt_version = advisor.PROMPT_VERSION
+        _clear_briefing()
     if "provider" not in st.session_state:
         st.session_state.provider = (
             settings.provider if settings.provider in PROVIDERS else "offline"
@@ -138,7 +135,7 @@ def _render_direction_overview(dataset: Dataset, decisions: list[dict[str, str |
     }
     for decision in decisions:
         measure = measures[str(decision["measure_id"])]
-        selected_by_direction[measure.direction].append(measure.id)
+        selected_by_direction[measure.direction].append(f"{measure.id} · {measure.name}")
 
     st.subheader("Меры по направлениям")
     directions = list(selected_by_direction.items())
@@ -150,7 +147,8 @@ def _render_direction_overview(dataset: Dataset, decisions: list[dict[str, str |
                     st.markdown(f"**{direction}**")
                     st.caption(f"Выбрано мер: {len(measure_ids)} / {MAX_PER_DIRECTION}")
                     if measure_ids:
-                        st.write(" · ".join(measure_ids))
+                        for label in measure_ids:
+                            st.caption(label)
                     else:
                         st.caption("Пока нет выбранных мер")
 
@@ -199,7 +197,7 @@ def _render_result(result: SimulationResult) -> None:
     st.header("Результат сценария")
     score, budget, weakest, critical = st.columns(4)
     with score:
-        st.metric("Итоговый Score", f"{result.city_score_after:.2f}", f"{result.city_score_delta:+.2f}")
+        st.metric("Итоговая оценка города", f"{result.city_score_after:.2f}", f"{result.city_score_delta:+.2f}")
         st.caption(f"До решений: {result.city_score_before:.2f}")
     with budget:
         st.metric("Использовано бюджета", f"{result.budget_used} / {result.budget_limit}")
@@ -213,7 +211,7 @@ def _render_result(result: SimulationResult) -> None:
         st.caption(f"До решений: {result.critical_metrics_before}")
     for metric in result.critical_locations_after:
         st.warning(
-            f"{metric.district} · {metric.indicator} — {INDICATOR_LABELS[metric.indicator]}: "
+            f"{metric.district} · {INDICATOR_LABELS[metric.indicator]}: "
             f"{metric.value:.2f} (ниже критического порога)."
         )
     st.subheader("Изменения по районам")
@@ -228,6 +226,10 @@ def _render_result(result: SimulationResult) -> None:
         },
     )
     st.caption("Расчёт учитывает лаги мер, синергии и ограничения шкалы показателей.")
+    with st.expander("Справочник показателей"):
+        for direction, indicators in INDICATOR_GROUPS.items():
+            st.markdown(f"**{direction}**")
+            st.caption(" · ".join(f"{INDICATOR_LABELS[code]} ({code})" for code in indicators))
 
 
 def _render_briefing(settings: advisor.AdvisorSettings) -> None:
