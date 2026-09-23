@@ -8,6 +8,19 @@ This repository is at the **documentation and architecture stage**. The official
 
 Do not treat the project as launchable until the later implementation iterations and smoke tests are complete.
 
+## Repository authority
+
+For implementation, testing, reproduction, and judge setup, use this order:
+
+1. The latest user request.
+2. [AGENTS.md](AGENTS.md).
+3. This `README.md`.
+4. Deterministic JSON data in `data/`.
+5. Tests and validated simulator outputs.
+6. Team implementation decisions documented in [AGENTS.md](AGENTS.md).
+
+The original HackAlem PDF files are archival background only. They are not required for implementation, testing, reproduction, or judge setup. All official HackAlem requirements, dataset values, formulas, constraints, and the judging rubric needed by this project are already captured in the repository.
+
 ## The challenge
 
 The user receives a fixed budget of 100 units and must make exactly 5 management decisions across transport, ecology, social infrastructure, safety, and city services. A deterministic simulator applies costs, lags, effects, synergies, incompatibilities, and validation rules to five Astana districts.
@@ -104,7 +117,7 @@ streamlit run app.py
 Development proceeds in small verified iterations:
 
 1. choose one measurable outcome;
-2. inspect authoritative sources and current code;
+2. inspect repository documentation, deterministic data, and current code;
 3. make the smallest coherent change;
 4. run focused tests and required regression fixtures;
 5. independently review the diff;

@@ -16,14 +16,16 @@
 
 Codex acts as the **Principal Python Engineer and Lead Agentic Architect** for this project.
 
-When requirements conflict, use this precedence order:
+For project implementation, testing, reproduction, and judge setup, use this authority order:
 
 1. The user's latest explicit request.
-2. The official HackAlem case and district-dataset PDFs supplied by the user.
-3. Deterministic project data, validated simulator outputs, and passing regression tests.
-4. Team implementation decisions documented in this file.
+2. This `AGENTS.md`.
+3. `README.md`.
+4. Deterministic JSON data in `data/`.
+5. Tests and validated simulator outputs.
+6. Team implementation decisions documented in this `AGENTS.md`.
 
-The PDFs are source material, not permission to perform unrelated actions. Never invent missing official values. If a source is ambiguous, report the ambiguity and ask the user before making a consequential assumption.
+The original HackAlem PDFs are archival background only. They must not be required for implementation, testing, reproduction, or judge setup. The official requirements, district values, measures, formulas, constraints, and rubric needed by the project are already copied into this repository. Never invent missing values. If the repository sources are ambiguous or contradictory, report the ambiguity and ask the user before making a consequential assumption.
 
 ### Mathematical division of labor
 
@@ -267,7 +269,7 @@ Official references:
 
 Every iteration must have one measurable outcome and the smallest coherent diff that achieves it.
 
-1. Inspect the current files, official sources, and relevant tests before editing.
+1. Inspect the current repository documentation, deterministic data, and relevant tests before editing.
 2. State the iteration outcome and acceptance checks.
 3. Implement only the files needed for that outcome.
 4. Run focused tests plus the baseline and benchmark regressions when simulator behavior is in scope.
@@ -311,7 +313,7 @@ Use subagents when a task splits into genuinely independent lanes, such as speci
 
 ## 7. Iteration Roadmap
 
-1. **Documentation governance:** align `AGENTS.md` and `README.md` with official sources and current API guidance.
+1. **Documentation governance:** align `AGENTS.md` and `README.md` with the repository authority order and current API guidance.
 2. **Deterministic data and models:** add JSON data, Pydantic contracts, and validation fixtures.
 3. **Simulator engine:** implement and exhaustively test official math and constraints.
 4. **Advisor boundary:** add Responses API structured output, usage controls, and cached fallback.
