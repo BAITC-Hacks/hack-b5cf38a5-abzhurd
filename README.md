@@ -4,9 +4,9 @@ AI-симулятор управления городом Астана для Ha
 
 ## Current status
 
-This repository is at the **documentation and architecture stage**. The official dataset and implementation contract are documented, but the simulator, OpenAI advisor, Streamlit interface, tests, `data/*.json`, and `run.sh` are not implemented yet.
+The **deterministic simulator is implemented and tested**: official JSON data, Pydantic contracts, scenario validation, scoring, and a numeric audit of direct effects, synergies, and clipping. Python performs all calculations without network access or an API key.
 
-Do not treat the project as launchable until the later implementation iterations and smoke tests are complete.
+The OpenAI advisor and Streamlit interface are still empty placeholders; `run.sh` is not implemented. The complete application is not yet launchable. `mock_debrief.json` exists, but its scenario grounding and fallback integration belong to the advisor iteration.
 
 ## Repository authority
 
@@ -43,8 +43,8 @@ $$Score=0.7D_{avg}+0.3\min(D_d)-N_{crit}$$
 
 Verified reference values:
 
-- Baseline: `D_avg = 56.86`, weakest district `Нура = 49.18`, `N_crit = 2`, final `Score = 52.56`.
-- Benchmark: M7(Нура), M8(Нура), M10(Нура), M12(Город), M5(Сарыарка), cost 95, Score approximately 56.5.
+- Baseline: unrounded `D_avg = 56.8624`, weakest district `Нура = 49.18`, `N_crit = 2`, final `Score = 52.55768` (displayed as 52.56).
+- Benchmark: M7(Нура), M8(Нура), M10(Нура), M12(Город), M5(Сарыарка), cost 95, `D_avg = 58.0776`, `N_crit = 0`, `Score = 56.54307`, delta `+3.98539`.
 
 The complete district table, measure catalog, weights, synergies, conflicts, and validation rules are maintained in [AGENTS.md](AGENTS.md).
 
@@ -70,16 +70,74 @@ Our planned MVP adds Streamlit KPI cards, presets, before/after analytics, an in
 ├── requirements.txt
 ├── .env.example
 ├── run.sh                    # planned
-├── data/                     # planned
+├── data/                     # verified source data
 │   ├── districts.json
 │   ├── measures.json
 │   └── mock_debrief.json
 ├── engine/
-│   ├── models.py             # planned implementation
-│   ├── simulator.py          # planned implementation
-│   └── advisor.py            # planned implementation
-└── app.py                    # planned implementation
+│   ├── models.py             # data, validation, and audit contracts
+│   ├── simulator.py          # pure validation and scoring; JSON loader
+│   └── advisor.py            # empty placeholder
+├── tests/
+│   └── test_simulator.py     # independent exact-arithmetic reference and regressions
+└── app.py                    # empty placeholder
 ```
+
+## Run the deterministic engine tests
+
+From the repository root, using Python 3.10 or later:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install 'pydantic>=2.7.0,<3'
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Only Pydantic and the Python standard library are needed for this iteration. The tests use independent exact rational arithmetic to check the official formulas and all 2,002 distinct five-measure combinations with a fixed district assignment, plus dedicated assignment, conflict, budget, clipping, threshold, and permutation cases. Synthetic boundary fixtures never modify the official JSON files.
+
+The complete sweep checks all 1,407,050 scope-correct district assignments against an independent validator and exact integer arithmetic, including every valid scenario's indicators and Score. It takes several minutes and is opt-in:
+
+```bash
+SIMULATOR_EXHAUSTIVE=1 .venv/bin/python -m unittest discover -s tests -v
+```
+
+## Simulator API
+
+```python
+from engine.models import SimulationResult
+from engine.simulator import DatasetError, load_dataset, simulate, validate_scenario
+
+decisions = [
+    {"measure_id": "M7", "district": "Нура"},
+    {"measure_id": "M8", "district": "Нура"},
+    {"measure_id": "M10", "district": "Нура"},
+    {"measure_id": "M12"},  # Citywide: omit district (or use None).
+    {"measure_id": "M5", "district": "Сарыарка"},
+]
+try:
+    dataset = load_dataset()  # Resolves data/ relative to the module, not the cwd.
+except DatasetError as error:
+    print(str(error))  # A future UI must display this without a traceback.
+else:
+    report = validate_scenario(decisions, dataset)  # Optional form feedback.
+    outcome = simulate(decisions, dataset)  # Always revalidates.
+    if isinstance(outcome, SimulationResult):
+        print(f"Score: {outcome.city_score_after:.2f}")
+        audit_json = outcome.model_dump_json(indent=2)
+    else:
+        for issue in outcome.errors:
+            print(issue.code, issue.decision_indices, issue.message)
+```
+
+`load_dataset(data_dir=None)` is the only operation that reads files. It rejects malformed/incomplete data with `DatasetError`; it never invents replacements. Weights and scalar rules are transcribed from AGENTS.md §3 into `engine/models.py`. JSON contains explicit synergy target measures and global/same-district conflict scopes. Dataset checks cover structure and arithmetic integrity; official-value fidelity is enforced by the regression tests.
+
+`validate_scenario(decisions, dataset)` and `simulate(decisions, dataset)` accept lists or tuples of decision dictionaries or `Decision` instances. Both require a validated `Dataset`. Issues contain stable codes, actionable messages, and zero-based input positions. Budget feedback is unknown when a row cannot be resolved; otherwise it totals submitted rows, including duplicates that independently invalidate the scenario. Invalid scenarios return a `ValidationReport` with no Score fields. Baseline evaluation is internal: an empty decision list is still invalid.
+
+Successful results use catalog order for decisions and official district order for district outputs. The first district in official order wins a weakest-district tie. `city_score_before/after` contain final penalized Scores; `weighted_city_score_before` and `weighted_city_score` contain before/after population-weighted averages. Python calculates all deltas, critical locations, and budget remaining. No intermediate rounding is performed; tests tolerate only floating-point representation error. The critical threshold is strictly `<40`, with no epsilon.
+
+`measure_contributions` is measure → district → indicator, containing lag-adjusted direct effects **before clipping**. Omitted contribution indicators mean zero. `synergy_contributions` contains separate pair bonuses. Full district/indicator `clipping_adjustments` reconcile direct effects plus synergies with the final indicator deltas. These are not additive shares of final Score. Different district outcomes may have equal scalar Scores; the formula is preserved without imposing score uniqueness.
+
+Only results freshly calculated by `simulate` are authoritative. Result schemas validate structure, ranges, and selected consistency checks; they do not authenticate an imported or edited numeric audit. Regenerate results from their decisions before trusting imported data. The future advisor must receive the Python output and must not recalculate any value.
 
 ## OpenAI API and budget policy
 

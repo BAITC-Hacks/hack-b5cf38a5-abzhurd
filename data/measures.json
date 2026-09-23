@@ -17,13 +17,13 @@
     {"id": "M14", "direction": "Сервисы", "name": "Аварийные бригады ЖКХ + раннее оповещение", "scope": "Город", "cost": 16, "lag": 1, "effects": {"C1": 5, "C2": 2}}
   ],
   "synergies": [
-    {"measures": ["M1", "M2"], "indicator": "T1", "bonus": 2, "location": "first_district_measure"},
-    {"measures": ["M10", "M12"], "indicator": "B1", "bonus": 2, "location": "first_district_measure"},
-    {"measures": ["M5", "M6"], "indicator": "E2", "bonus": 2, "location": "first_district_measure"}
+    {"measures": ["M1", "M2"], "indicator": "T1", "bonus": 2, "target_measure": "M1"},
+    {"measures": ["M10", "M12"], "indicator": "B1", "bonus": 2, "target_measure": "M10"},
+    {"measures": ["M5", "M6"], "indicator": "E2", "bonus": 2, "target_measure": "M5"}
   ],
   "incompatibilities": [
-    {"measures": ["M1", "M3"], "reason": "BRT и LRT нельзя выбрать одновременно."},
-    {"measures": ["M4", "M7"], "reason": "Конфликт за участок в одном районе."},
-    {"measures": ["M5", "M13"], "reason": "Дублирование программы в одном районе."}
+    {"measures": ["M1", "M3"], "scope": "global", "reason": "BRT и LRT нельзя выбрать одновременно."},
+    {"measures": ["M4", "M7"], "scope": "same_district", "reason": "Конфликт за участок в одном районе."},
+    {"measures": ["M5", "M13"], "scope": "same_district", "reason": "Дублирование программы в одном районе."}
   ]
 }

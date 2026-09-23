@@ -194,9 +194,9 @@ Verified fixtures:
 
 The choices in this section are team decisions, not claims about mandatory hackathon technology.
 
-### 4.1 Target architecture
+### 4.1 Current and target architecture
 
-The following is the target structure for later iterations. It does not claim that every file is implemented today.
+The deterministic data, contracts, simulator, and tests are implemented. Later components are explicitly marked below.
 
 ```text
 ├── AGENTS.md                 # Project rules and verified specification
@@ -204,19 +204,31 @@ The following is the target structure for later iterations. It does not claim th
 ├── requirements.txt          # Minimal stable dependencies
 ├── .env.example              # Non-secret environment template
 ├── run.sh                    # Planned one-command launch helper
-├── data/                     # Planned deterministic source data
+├── data/                     # Verified deterministic source data
 │   ├── districts.json
 │   ├── measures.json
 │   └── mock_debrief.json
 ├── engine/
 │   ├── __init__.py
-│   ├── models.py             # Planned Pydantic contracts
-│   ├── simulator.py          # Planned pure deterministic engine
-│   └── advisor.py            # Planned Responses API adapter + fallback
-└── app.py                    # Planned Streamlit dashboard
+│   ├── models.py             # Validated data, scenario, and audit contracts
+│   ├── simulator.py          # Deterministic validation, scoring, and JSON loader
+│   └── advisor.py            # Empty placeholder for Responses API + fallback
+├── tests/
+│   └── test_simulator.py     # Independent arithmetic oracle and regressions
+└── app.py                    # Empty placeholder for Streamlit dashboard
 ```
 
-At the end of this documentation iteration, `data/*.json`, `run.sh`, the simulator, advisor, UI, and tests remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
+The simulator iteration implements `load_dataset`, `validate_scenario`, and `simulate`. The advisor, UI, fallback integration, and `run.sh` remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
+
+Simulator contract decisions:
+
+- Invalid inputs return a structured validation report with no Score. Dataset loading failures raise a concise `DatasetError` for the future application boundary to display.
+- Weights and scalar constraints are transcribed from §3 into Python constants. JSON encodes explicit synergy targets and conflict scopes; no descriptive prose is parsed for behavior.
+- Python calculates per-measure lag-adjusted district/indicator effects before clipping, separate synergy bonuses, separate clipping adjustments, and explicit indicator deltas. Per-measure attribution of final Score is not defined or required.
+- Calculate without intermediate rounding, accumulate in canonical order, and round only for display. Weakest-district ties use the first district in the official order. Critical detection remains strictly `<40`.
+- The unchanged scoring formula can map different indicator outcomes to the same scalar Score. Score-change acceptance uses scenarios whose calculated Scores differ; it does not impose universal uniqueness on the formula.
+- Tests verify baseline Score `52.55768` (display `52.56`) and benchmark Score `56.54307`, using independent Python arithmetic. Synthetic fixtures exercise boundaries without replacing official data.
+- The core accepts a validated `Dataset`; only freshly generated simulator results are authoritative. Structural validation of an imported audit is not proof that its numbers are correct; recalculate from decisions.
 
 ### 4.2 Planned product experience
 
