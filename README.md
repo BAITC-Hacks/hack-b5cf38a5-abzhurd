@@ -6,7 +6,7 @@ AI-симулятор управления городом Астана для Ha
 
 The **deterministic simulator is implemented and tested**: official JSON data, Pydantic contracts, scenario validation, scoring, and a numeric audit of direct effects, synergies, and clipping. Python performs all calculations without network access or an API key.
 
-The OpenAI advisor and Streamlit interface are still empty placeholders; `run.sh` is not implemented. The complete application is not yet launchable. `mock_debrief.json` exists, but its scenario grounding and fallback integration belong to the advisor iteration.
+The advisor now supports OpenAI, NVIDIA, and a deterministic offline briefing. The Streamlit interface is still an empty placeholder and `run.sh` is not implemented, so the complete application is not yet launchable. Provider calls are covered by mocked tests; a live call still requires the user's own key and account access.
 
 ## Repository authority
 
@@ -77,9 +77,10 @@ Our planned MVP adds Streamlit KPI cards, presets, before/after analytics, an in
 ├── engine/
 │   ├── models.py             # data, validation, and audit contracts
 │   ├── simulator.py          # pure validation and scoring; JSON loader
-│   └── advisor.py            # empty placeholder
+│   └── advisor.py            # OpenAI/NVIDIA adapters and offline fallback
 ├── tests/
-│   └── test_simulator.py     # independent exact-arithmetic reference and regressions
+│   ├── test_simulator.py     # independent exact-arithmetic reference and regressions
+│   └── test_advisor.py       # mocked provider and fallback tests
 └── app.py                    # empty placeholder
 ```
 
@@ -137,25 +138,45 @@ Successful results use catalog order for decisions and official district order f
 
 `measure_contributions` is measure → district → indicator, containing lag-adjusted direct effects **before clipping**. Omitted contribution indicators mean zero. `synergy_contributions` contains separate pair bonuses. Full district/indicator `clipping_adjustments` reconcile direct effects plus synergies with the final indicator deltas. These are not additive shares of final Score. Different district outcomes may have equal scalar Scores; the formula is preserved without imposing score uniqueness.
 
-Only results freshly calculated by `simulate` are authoritative. Result schemas validate structure, ranges, and selected consistency checks; they do not authenticate an imported or edited numeric audit. Regenerate results from their decisions before trusting imported data. The future advisor must receive the Python output and must not recalculate any value.
+Only results freshly calculated by `simulate` are authoritative. Result schemas validate structure, ranges, and selected consistency checks; they do not authenticate an imported or edited numeric audit. Regenerate results from their decisions before trusting imported data. The advisor receives the Python output and does not recalculate any value.
 
-## OpenAI API and budget policy
+## Advisor API and provider selection
 
-The planned advisor uses the OpenAI Responses API with structured Pydantic output.
+The advisor accepts only a complete `SimulationResult` from the deterministic engine. Calling `generate_debrief` is the explicit briefing action; imports and simulation do not contact a provider. The caller supplies a per-session cache dictionary. The future Streamlit UI will offer the provider dropdown; this iteration selects it through configuration.
 
-Reserved configuration for the advisor iteration:
+Copy `.env.example` to an untracked `.env`, then set the key for the provider you intend to use:
 
 ```dotenv
+ADVISOR_PROVIDER=openai
+MOCK_MODE=false
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-6-sol
 OPENAI_REASONING_EFFORT=low
-OPENAI_MAX_OUTPUT_TOKENS=700
-MOCK_MODE=false
+NVIDIA_API_KEY=
+NVIDIA_MODEL=mistralai/mistral-nemotron
+ADVISOR_MAX_OUTPUT_TOKENS=700
 ```
 
-The default is `gpt-6-sol`, subject to account availability. The official OpenAI documentation describes Sol as suitable for work requiring judgment. Current standard short-context pricing is $2 per million input tokens and $10 per million output tokens, so a representative 2,000-input-token and 600-output-token debrief is about $0.01. Prices can change; consult the [model page](https://developers.openai.com/api/docs/models/gpt-6-sol), [selection guide](https://developers.openai.com/api/docs/guides/model-selection), and [pricing page](https://developers.openai.com/api/docs/pricing).
+`ADVISOR_PROVIDER` accepts `openai` (default), `nvidia`, or `offline`. `MOCK_MODE=true` always selects offline. OpenAI uses the [Responses API structured-output helper](https://developers.openai.com/api/docs/guides/structured-outputs) with [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol). NVIDIA uses its [hosted Chat Completions endpoint](https://docs.api.nvidia.com/nim/reference/mistralai-mistral-nemotron-infer) and a [configurable model](https://build.nvidia.com/mistralai/mistral-nemotron). The NVIDIA-hosted default is supplied by Mistral AI, not by OpenAI. Availability and charges depend on your NVIDIA account; the app does not estimate its pricing or credit balance.
 
-The available $50 API credit will be protected by calling the model only for a complete valid scenario, limiting output to 700 tokens, caching results per scenario, recording usage when available, and never calling the API on every Streamlit rerun. Missing credentials, disabled API mode, unavailable models, malformed output, timeouts, rate limits, and network errors will use a cached mock briefing.
+```python
+from engine.advisor import generate_debrief
+from engine.models import SimulationResult
+from engine.simulator import load_dataset, simulate
+
+dataset = load_dataset()
+result = simulate(decisions, dataset)  # Use the five decisions defined above.
+if isinstance(result, SimulationResult):
+    session_cache = {}
+    briefing = generate_debrief(result, session_cache)
+    print(briefing.source, briefing.why_score_changed)
+```
+
+An explicit `provider="nvidia"` argument overrides `ADVISOR_PROVIDER` for that call; mock mode still wins. A missing key or failed call returns `source="mock"` without trying the other provider. The advisor sends only calculated scenario facts and Python-generated candidate sentences, never conversation history. The model selects one candidate for each briefing field. Pydantic validates the returned structure and Python rejects any text that is not an exact candidate, preventing invented numbers, events, or measures from reaching the UI. Python also assigns `source`. The cached fallback uses `data/mock_debrief.json` templates filled with the actual score direction, critical metrics, and weakest district, so it works when the API is unavailable. Imported audit JSON must be recomputed by `simulate` before use.
+
+Cache keys include the chosen provider, model, prompt version, and canonical simulation facts. A request has a 700-token maximum, a 20-second timeout, and no SDK retries. The adapter logs request ID and token usage when supplied, without logging keys or prompt contents. A timeout, rate limit, refusal, malformed or truncated response, or unavailable model produces the offline briefing. After changing credentials or model settings in a running UI session, clear that session's cache to force a fresh briefing.
+
+Run the mocked advisor and simulator tests with `.venv/bin/python -m unittest discover -s tests -v`. No live API request is part of the automated test suite. The OpenAI SDK requirement is `openai>=3.17,<4`, which supports the Responses parse helper used here.
 
 ## Reproducible launch
 
@@ -188,7 +209,7 @@ Planned iterations:
 1. Documentation governance.
 2. Deterministic data and Pydantic models.
 3. Simulator engine and regression tests.
-4. Responses API advisor and offline fallback.
+4. Dual-provider advisor and offline fallback — implemented with mocked provider tests.
 5. Streamlit MVP and JSON export.
 6. Reproducibility, smoke testing, and judge-facing polish.
 

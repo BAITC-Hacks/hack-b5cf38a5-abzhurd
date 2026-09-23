@@ -6,7 +6,7 @@ from math import fsum, isclose, isfinite
 from types import MappingProxyType
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
 
 
 Indicator = Literal["T1", "T2", "E1", "E2", "S1", "S2", "B1", "B2", "C1", "C2"]
@@ -246,4 +246,11 @@ class Debrief(BaseModel):
     why_score_changed: str
     main_risk: str
     next_quarter_recommendation: str
-    source: str = "openai"
+    source: Literal["openai", "nvidia", "mock"]
+
+    @field_validator("why_score_changed", "main_risk", "next_quarter_recommendation")
+    @classmethod
+    def nonempty_text(cls, value: str) -> str:
+        if not value.strip() or len(value) > 1500:
+            raise ValueError("Briefing sections must contain 1–1500 nonblank characters.")
+        return value.strip()

@@ -4,7 +4,7 @@
 >
 > **Team:** Solo Vibecoder assisted by OpenAI Codex
 >
-> **Planned stack:** Python 3.10+, Streamlit, Pydantic v2, OpenAI Responses API, python-dotenv
+> **Planned stack:** Python 3.10+, Streamlit, Pydantic v2, OpenAI Responses API, NVIDIA Chat Completions API, python-dotenv
 >
 > **Default advisor model:** `gpt-6-sol` (configurable, with offline fallback)
 >
@@ -212,13 +212,14 @@ The deterministic data, contracts, simulator, and tests are implemented. Later c
 │   ├── __init__.py
 │   ├── models.py             # Validated data, scenario, and audit contracts
 │   ├── simulator.py          # Deterministic validation, scoring, and JSON loader
-│   └── advisor.py            # Empty placeholder for Responses API + fallback
+│   └── advisor.py            # OpenAI/NVIDIA adapters + deterministic fallback
 ├── tests/
-│   └── test_simulator.py     # Independent arithmetic oracle and regressions
+│   ├── test_simulator.py     # Independent arithmetic oracle and regressions
+│   └── test_advisor.py       # Mocked provider and fallback tests
 └── app.py                    # Empty placeholder for Streamlit dashboard
 ```
 
-The simulator iteration implements `load_dataset`, `validate_scenario`, and `simulate`. The advisor, UI, fallback integration, and `run.sh` remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
+The simulator and advisor iterations implement `load_dataset`, `validate_scenario`, `simulate`, and `generate_debrief`. The UI and `run.sh` remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
 
 Simulator contract decisions:
 
@@ -245,35 +246,18 @@ Team-selected MVP features:
 
 These choices implement or extend the official must-haves; charts, presets, comparisons, recommendations, and exports remain team-selected enhancements.
 
-### 4.3 Planned OpenAI API contract and $50 budget
+### 4.3 Implemented dual-provider advisor and API budget controls
 
-- Use the OpenAI **Responses API**.
-- Default model: `OPENAI_MODEL=gpt-6-sol`.
-- Default reasoning effort: `OPENAI_REASONING_EFFORT=low`.
-- Default output cap: `OPENAI_MAX_OUTPUT_TOKENS=700`.
-- API key: `OPENAI_API_KEY`; never commit a real key.
-- Offline override: `MOCK_MODE`.
-- Validate the response against a Pydantic `Debrief` schema before display.
-- Model access varies by account; inability to use the configured model must produce the cached fallback, not a crash.
+- `ADVISOR_PROVIDER=openai` is the default. `nvidia` selects NVIDIA; `offline` or `MOCK_MODE=true` skips APIs. The provider is chosen explicitly for each briefing; failure never charges the other provider.
+- OpenAI uses the Responses API structured-output helper with `OPENAI_MODEL=gpt-6-sol` and `OPENAI_REASONING_EFFORT=low`. NVIDIA uses its hosted Chat Completions endpoint with `NVIDIA_MODEL=mistralai/mistral-nemotron`. Both models are configurable.
+- Credentials are independent: `OPENAI_API_KEY` and `NVIDIA_API_KEY`. Never commit, print, or log either key. The NVIDIA-hosted default is a Mistral AI model; NVIDIA's catalog publishes Russian-language evaluation for it.
+- `ADVISOR_MAX_OUTPUT_TOKENS` defaults to 700 and cannot exceed 700. Each selected provider uses a 20-second maximum timeout, zero SDK retries, and one call per uncached explicit briefing request.
+- The caller supplies a per-session cache; its key includes provider, model, prompt version, credential presence, and canonical Python-calculated facts. API responses and deterministic offline briefings are cached. There is no automatic API request on import, form edit, or simulation.
+- A valid `SimulationResult` supplies the prompt facts and Python-generated Russian candidate sentences. The model selects one sentence per briefing field; Python rejects any text outside those candidates after Pydantic validation and assigns `Debrief.source`. This prevents invented facts from being displayed. Missing keys, mock mode, refusal, incomplete output, malformed JSON, unsupported model, timeout, rate limit, and network failure lead to a cached offline briefing.
+- Offline wording comes from `mock_debrief.json` templates populated with the actual Python result. If templates are missing or malformed, built-in templates preserve the fallback. Request ID and token usage are logged when available, without prompts or secrets.
+- Model access and NVIDIA billing depend on the user's account. No fixed NVIDIA price or credit consumption is assumed; check current provider billing before final submission.
 
-The current official OpenAI documentation describes Sol as an everyday model for work requiring judgment and lists standard short-context rates of $2 per million input tokens and $10 per million output tokens. At those rates, a representative 2,000-input-token and 600-output-token debrief costs about $0.01. Pricing can change, so re-check the official model and pricing pages before final submission.
-
-Cost controls:
-
-- Call the API only for a complete, valid scenario and an explicit simulation/debrief action.
-- Never call the API on every Streamlit rerun, partial form edit, or invalid scenario.
-- Send only validated decisions and deterministic simulation facts needed for the explanation.
-- Do not send conversation history or ask the model to recompute the simulation.
-- Cache one debrief per stable scenario during the session.
-- Record request/model/token usage when the API returns it, without logging secrets.
-- Enforce the output cap and use a short structured prompt.
-- Fall back to `mock_debrief.json` for missing key, mock mode, timeout, rate limit, malformed output, unavailable model, or network failure.
-
-Official references:
-
-- [GPT-6 Sol model](https://developers.openai.com/api/docs/models/gpt-6-sol)
-- [Model selection](https://developers.openai.com/api/docs/guides/model-selection)
-- [API pricing](https://developers.openai.com/api/docs/pricing)
+Official references: [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol), [NVIDIA endpoint](https://docs.api.nvidia.com/nim/reference/mistralai-mistral-nemotron-infer), [NVIDIA-hosted model](https://docs.api.nvidia.com/nim/reference/mistralai-mistral-nemotron).
 
 ---
 
@@ -315,7 +299,7 @@ Use subagents when a task splits into genuinely independent lanes, such as speci
 - Python is the sole authority for numerical results.
 - Advisor input must include the final validated facts, per-district/per-indicator deltas, and per-measure contributions needed for explanation.
 - Advisor prompts explicitly forbid arithmetic, unsupported causal claims, invented events, and invented policy measures.
-- Structured output must pass Pydantic validation before display; otherwise use the mock fallback.
+- Structured output must pass Pydantic validation and match Python-generated fact-grounded candidates before display; otherwise use the mock fallback. The model is never the source of authoritative numeric facts.
 - Baseline Score 52.56 and the reference benchmark near 56.5 are mandatory regression fixtures.
 - Tests must cover strict `<40` critical detection, clipping, lag scaling, citywide effects, synergies, conflicts, duplicate measures, district assignment, count, balance, and budget.
 - When evidence is missing or contradictory, label the uncertainty and ask rather than guessing.
