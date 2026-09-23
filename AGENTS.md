@@ -196,13 +196,14 @@ The choices in this section are team decisions, not claims about mandatory hacka
 
 ### 4.1 Current and target architecture
 
-The deterministic data, contracts, simulator, and tests are implemented. Later components are explicitly marked below.
+The deterministic data, simulator, advisor, Streamlit core flow, and their tests are implemented. Later components are explicitly marked below.
 
 ```text
 ├── AGENTS.md                 # Project rules and verified specification
 ├── README.md                 # Judge-facing status, setup, and architecture
 ├── requirements.txt          # Minimal stable dependencies
 ├── .env.example              # Non-secret environment template
+├── .streamlit/config.toml    # Light Astana theme
 ├── run.sh                    # Planned one-command launch helper
 ├── data/                     # Verified deterministic source data
 │   ├── districts.json
@@ -215,15 +216,16 @@ The deterministic data, contracts, simulator, and tests are implemented. Later c
 │   └── advisor.py            # OpenAI/NVIDIA adapters + deterministic fallback
 ├── tests/
 │   ├── test_simulator.py     # Independent arithmetic oracle and regressions
-│   └── test_advisor.py       # Mocked provider and fallback tests
-└── app.py                    # Empty placeholder for Streamlit dashboard
+│   ├── test_advisor.py       # Mocked provider and fallback tests
+│   └── test_app.py           # Offline Streamlit acceptance tests
+└── app.py                    # Russian-language Streamlit core flow
 ```
 
-The simulator and advisor iterations implement `load_dataset`, `validate_scenario`, `simulate`, and `generate_debrief`. The UI and `run.sh` remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
+The core UI uses `load_dataset`, `validate_scenario`, `simulate`, and `generate_debrief` without changing their contracts or official calculations. It groups currently selected measure IDs under the five catalog directions and labels each decision row with its measure's direction. Charts, heatmaps, additional presets, audit export, and `run.sh` remain work for subsequent iterations. Documentation must never describe a planned component as already operational.
 
 Simulator contract decisions:
 
-- Invalid inputs return a structured validation report with no Score. Dataset loading failures raise a concise `DatasetError` for the future application boundary to display.
+- Invalid inputs return a structured validation report with no Score. Dataset loading failures raise `DatasetError`; the UI displays a concise Russian error without a traceback.
 - Weights and scalar constraints are transcribed from §3 into Python constants. JSON encodes explicit synergy targets and conflict scopes; no descriptive prose is parsed for behavior.
 - Python calculates per-measure lag-adjusted district/indicator effects before clipping, separate synergy bonuses, separate clipping adjustments, and explicit indicator deltas. Per-measure attribution of final Score is not defined or required.
 - Calculate without intermediate rounding, accumulate in canonical order, and round only for display. Weakest-district ties use the first district in the official order. Critical detection remains strictly `<40`.
@@ -231,18 +233,27 @@ Simulator contract decisions:
 - Tests verify baseline Score `52.55768` (display `52.56`) and benchmark Score `56.54307`, using independent Python arithmetic. Synthetic fixtures exercise boundaries without replacing official data.
 - The core accepts a validated `Dataset`; only freshly generated simulator results are authoritative. Structural validation of an imported audit is not proof that its numbers are correct; recalculate from decisions.
 
-### 4.2 Planned product experience
+### 4.2 Implemented core experience and planned enhancements
 
-Team-selected MVP features:
+Implemented core behavior:
 
 - Astana-branded Streamlit dashboard.
 - KPI cards for budget, final Score and delta, weakest district, and critical alerts.
 - Five decision rows with measure and conditional district selection.
 - Real-time local validation and budget feedback.
-- A before/after district comparison and indicator heat breakdown.
+- A before/after district comparison table in official district order.
 - A structured AI briefing with "Почему изменился балл", "Главный риск", and "Рекомендация".
+- The verified reference scenario is prefilled, with clear and reload-example actions. Initial rendering does not simulate or request a briefing.
+- Editing any decision clears the displayed result and briefing. Citywide measures submit no district; switching back to district scope requires a district selection.
+- Only a valid explicit simulation produces results. A separate briefing button invokes the selected provider. Changing providers clears only the briefing; mock mode forces offline selection.
+- The session cache survives decision edits and resets. Credentials remain in local configuration, outside UI session state.
+- Dataset and operational failures display recoverable Russian messages without tracebacks.
+
+Planned enhancements:
+
+- Charts and indicator heat breakdown.
 - JSON scenario-audit download.
-- Presets for a reference balance scenario, an ecology/service scenario, and a transport/safety scenario.
+- Ecology/service and transport/safety presets.
 
 These choices implement or extend the official must-haves; charts, presets, comparisons, recommendations, and exports remain team-selected enhancements.
 
@@ -313,7 +324,7 @@ Use subagents when a task splits into genuinely independent lanes, such as speci
 2. **Deterministic data and models:** add JSON data, Pydantic contracts, and validation fixtures.
 3. **Simulator engine:** implement and exhaustively test official math and constraints.
 4. **Advisor boundary:** add Responses API structured output, usage controls, and cached fallback.
-5. **Streamlit MVP:** implement selection, validation, KPIs, analytics, and export.
+5. **Streamlit MVP:** core selection, validation, KPIs, district table, and explicit briefing controls are implemented; charts, additional presets, and export remain.
 6. **Reproducibility and polish:** add `run.sh`, complete README launch instructions, perform offline/API smoke tests, and verify the judge rubric.
 
 Do not silently combine roadmap stages. Begin the next iteration only after the current outcome is verified and reported.

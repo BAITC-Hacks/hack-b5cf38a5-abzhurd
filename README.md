@@ -6,7 +6,9 @@ AI-симулятор управления городом Астана для Ha
 
 The **deterministic simulator is implemented and tested**: official JSON data, Pydantic contracts, scenario validation, scoring, and a numeric audit of direct effects, synergies, and clipping. Python performs all calculations without network access or an API key.
 
-The advisor now supports OpenAI, NVIDIA, and a deterministic offline briefing. The Streamlit interface is still an empty placeholder and `run.sh` is not implemented, so the complete application is not yet launchable. Provider calls are covered by mocked tests; a live call still requires the user's own key and account access.
+The **Streamlit core flow is launchable**: five decision rows, live validation and budget feedback, a visual grouping of selected measures across the five directions, explicit simulation, result KPIs, a district comparison table, and a separate briefing button. Each decision row also labels its measure's direction. The reference scenario is prefilled. The advisor supports OpenAI, NVIDIA, and a deterministic offline briefing, with a provider selector and per-session cache. Automated provider tests use mocked responses; live calls require your own key and account access.
+
+Charts, indicator heatmaps, additional presets, JSON audit export, and `run.sh` remain planned enhancements. The current interface is in Russian with a light Astana theme.
 
 ## Repository authority
 
@@ -25,7 +27,7 @@ The original HackAlem PDF files are archival background only. They are not requi
 
 The user receives a fixed budget of 100 units and must make exactly 5 management decisions across transport, ecology, social infrastructure, safety, and city services. A deterministic simulator applies costs, lags, effects, synergies, incompatibilities, and validation rules to five Astana districts.
 
-Python will calculate the complete scenario. The LLM will receive those calculated facts and explain strengths, risks, consequences, and next-step recommendations. It will not calculate or invent authoritative numbers.
+Python calculates the complete scenario. The advisor selects briefing sentences grounded in those calculated facts. It does not calculate or invent authoritative numbers.
 
 ## Official scoring model
 
@@ -60,7 +62,7 @@ Official must-haves:
 
 The case also lists scenario comparison, indicator visualizations, AI recommendations, unexpected-event modeling, and presentation generation as optional enhancements.
 
-Our planned MVP adds Streamlit KPI cards, presets, before/after analytics, an indicator heat breakdown, a structured AI briefing, cached offline fallback, and JSON audit export. These are team implementation choices, not additional official rules.
+The implemented core UI adds KPI cards, the reference example, a visual measure-by-direction overview, a district before/after table, and structured briefings with cached offline fallback. Charts, additional presets, an indicator heat breakdown, and JSON audit export remain planned. These are team implementation choices, not additional official rules.
 
 ## Target architecture
 
@@ -69,6 +71,7 @@ Our planned MVP adds Streamlit KPI cards, presets, before/after analytics, an in
 ├── README.md
 ├── requirements.txt
 ├── .env.example
+├── .streamlit/config.toml    # light Astana theme
 ├── run.sh                    # planned
 ├── data/                     # verified source data
 │   ├── districts.json
@@ -80,21 +83,24 @@ Our planned MVP adds Streamlit KPI cards, presets, before/after analytics, an in
 │   └── advisor.py            # OpenAI/NVIDIA adapters and offline fallback
 ├── tests/
 │   ├── test_simulator.py     # independent exact-arithmetic reference and regressions
-│   └── test_advisor.py       # mocked provider and fallback tests
-└── app.py                    # empty placeholder
+│   ├── test_advisor.py       # mocked provider and fallback tests
+│   └── test_app.py           # offline UI acceptance and API-call boundary tests
+└── app.py                    # Russian-language Streamlit core flow
 ```
 
-## Run the deterministic engine tests
+## Run the tests
 
 From the repository root, using Python 3.10 or later:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install 'pydantic>=2.7.0,<3'
+.venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Only Pydantic and the Python standard library are needed for this iteration. The tests use independent exact rational arithmetic to check the official formulas and all 2,002 distinct five-measure combinations with a fixed district assignment, plus dedicated assignment, conflict, budget, clipping, threshold, and permutation cases. Synthetic boundary fixtures never modify the official JSON files.
+The full suite includes simulator regressions, mocked provider tests, and Streamlit AppTest acceptance tests. The UI tests isolate environment settings and SDK clients, so they do not read your keys or make paid requests. They cover initial state, validation, scope changes, stale-result removal, provider selection, cache reuse, offline fallback, and recoverable failures.
+
+The simulator tests use independent exact rational arithmetic to check the official formulas and all 2,002 distinct five-measure combinations with a fixed district assignment, plus dedicated assignment, conflict, budget, clipping, threshold, and permutation cases. Synthetic boundary fixtures never modify the official JSON files. To run only that suite, use `.venv/bin/python -m unittest tests.test_simulator -v`; it needs only Pydantic and the Python standard library.
 
 The complete sweep checks all 1,407,050 scope-correct district assignments against an independent validator and exact integer arithmetic, including every valid scenario's indicators and Score. It takes several minutes and is opt-in:
 
@@ -118,7 +124,7 @@ decisions = [
 try:
     dataset = load_dataset()  # Resolves data/ relative to the module, not the cwd.
 except DatasetError as error:
-    print(str(error))  # A future UI must display this without a traceback.
+    print(str(error))  # Command-line example; the UI shows a concise Russian error.
 else:
     report = validate_scenario(decisions, dataset)  # Optional form feedback.
     outcome = simulate(decisions, dataset)  # Always revalidates.
@@ -142,7 +148,7 @@ Only results freshly calculated by `simulate` are authoritative. Result schemas 
 
 ## Advisor API and provider selection
 
-The advisor accepts only a complete `SimulationResult` from the deterministic engine. Calling `generate_debrief` is the explicit briefing action; imports and simulation do not contact a provider. The caller supplies a per-session cache dictionary. The future Streamlit UI will offer the provider dropdown; this iteration selects it through configuration.
+The advisor accepts only a complete `SimulationResult` from the deterministic engine. Calling `generate_debrief` is the explicit briefing action; imports and simulation do not contact a provider. The UI supplies a per-session cache dictionary. The provider dropdown starts from configuration, and only the separate briefing button invokes the advisor.
 
 Copy `.env.example` to an untracked `.env`, then set the key for the provider you intend to use:
 
@@ -174,22 +180,34 @@ if isinstance(result, SimulationResult):
 
 An explicit `provider="nvidia"` argument overrides `ADVISOR_PROVIDER` for that call; mock mode still wins. A missing key or failed call returns `source="mock"` without trying the other provider. The advisor sends only calculated scenario facts and Python-generated candidate sentences, never conversation history. The model selects one candidate for each briefing field. Pydantic validates the returned structure and Python rejects any text that is not an exact candidate, preventing invented numbers, events, or measures from reaching the UI. Python also assigns `source`. The cached fallback uses `data/mock_debrief.json` templates filled with the actual score direction, critical metrics, and weakest district, so it works when the API is unavailable. Imported audit JSON must be recomputed by `simulate` before use.
 
-Cache keys include the chosen provider, model, prompt version, and canonical simulation facts. A request has a 700-token maximum, a 20-second timeout, and no SDK retries. The adapter logs request ID and token usage when supplied, without logging keys or prompt contents. A timeout, rate limit, refusal, malformed or truncated response, or unavailable model produces the offline briefing. After changing credentials or model settings in a running UI session, clear that session's cache to force a fresh briefing.
+Cache keys include the chosen provider, model, prompt version, and canonical simulation facts. A request has a 700-token maximum, a 20-second timeout, and no SDK retries. The adapter logs request ID and token usage when supplied, without logging keys or prompt contents. A timeout, rate limit, refusal, malformed or truncated response, or unavailable model produces the offline briefing. After editing `.env`, restart the Streamlit process and reload the browser page to load new settings and start a fresh session cache. Clearing the decision rows or loading the example intentionally preserves the existing briefing cache.
 
 Run the mocked advisor and simulator tests with `.venv/bin/python -m unittest discover -s tests -v`. No live API request is part of the automated test suite. The OpenAI SDK requirement is `openai>=3.17,<4`, which supports the Responses parse helper used here.
 
 ## Reproducible launch
 
-The intended final launch commands are:
+From the repository root, install the declared dependencies and launch the core UI:
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m streamlit run app.py
 ```
 
-**These commands are planned, not yet a working acceptance claim.** This section will be promoted to verified setup instructions only after the simulator, UI, data files, fallback, and smoke tests are implemented.
+For a fully offline demonstration on macOS/Linux, launch with an environment override:
+
+```bash
+MOCK_MODE=true .venv/bin/python -m streamlit run app.py
+```
+
+Open the local URL printed by Streamlit. No API key is needed for the simulator or offline briefing. The core flow was checked in a browser at desktop and phone widths; provider success/failure and call counts are covered by mocked AppTest tests.
+
+1. Keep the prefilled reference scenario and press **«Рассчитать сценарий»**. Expect Score **56.54**, delta **+3.99**, budget **95 / 100**, weakest district **Нура / 52.96**, and **0** critical metrics.
+2. Review the district table, select a briefing provider, and press **«Получить объяснение»**. With `MOCK_MODE=true`, the provider is fixed to **«Автономно»**. The displayed source reflects the actual response, including offline fallback.
+3. Change any decision: the previous result and briefing disappear. Validation and budget update immediately; the simulation button is disabled until the selection is valid.
+4. Use **«Очистить выбор»** for five empty rows or **«Загрузить пример»** to restore the reference. Neither action makes a provider request. Changing the provider clears only the briefing.
+
+`run.sh`, charts, heatmaps, additional presets, and JSON audit download are not implemented yet.
 
 ## Delivery workflow
 
@@ -210,7 +228,7 @@ Planned iterations:
 2. Deterministic data and Pydantic models.
 3. Simulator engine and regression tests.
 4. Dual-provider advisor and offline fallback — implemented with mocked provider tests.
-5. Streamlit MVP and JSON export.
+5. Streamlit MVP — core flow implemented; analytics, additional presets, and JSON export remain.
 6. Reproducibility, smoke testing, and judge-facing polish.
 
 ## Evaluation rubric
